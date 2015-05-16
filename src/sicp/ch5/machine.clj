@@ -66,9 +66,10 @@
 ;; label
 (defn make-label-entry [label-name insts]
   (cons label-name insts))
+
 (defn lookup-label [labels label-name]
   (let [val (drop-while #(not=  (first %) label-name) labels)]
-    (if val
+    (if (seq val)
       (rest (first val))
       (error "Undefined label -- ASSEMBLE" label-name))))
 
