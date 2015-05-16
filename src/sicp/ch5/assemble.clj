@@ -120,7 +120,7 @@
         #(set-contents! pc insts))
 
       (register-exp? dest)
-      (let [reg (get-register machine dest)]
+      (let [reg (get-register machine (register-exp-reg dest))]
         #(set-contents! pc (get-contents reg)))
 
       :else
