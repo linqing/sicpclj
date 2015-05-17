@@ -32,7 +32,7 @@
      (assign a (reg b))
      (assign b (reg t))
      (goto (label test-b))
-     gcb-done)))
+     gcd-done)))
 
 (deftest run-gcd-machine []
   (let [gcd-machine (make-gcd-machine)]
@@ -40,3 +40,20 @@
     (set-register-contents! gcd-machine 'b 40)
     (start gcd-machine)
     (is (= 2 (get-register-contents gcd-machine 'a)))))
+
+(defn make-infinite-gcd-machone []
+  (make-machine '(a b t)
+                {'rem rem, '=   =}
+                '(gcd-loop
+                  (assign a (op read))
+                  (assign b (op read))
+                  test-b
+                  (test (op =) (reg b) (const 0))
+                  (branch (label gcd-done))
+                  (assign t (op rem) (reg a) (reg b))
+                  (assign a (reg b))
+                  (assign b (reg t))
+                  (goto (label test-b))
+                  gcb-done
+                  (perform (op print) (reg a))
+                  (goto (label gcd-loop)))))
