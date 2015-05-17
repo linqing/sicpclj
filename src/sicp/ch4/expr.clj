@@ -60,11 +60,8 @@
 ;; begin包装起来一个表达式序列
 (defn begin?              [exp] (tagged-list? exp 'begin))
 (defn begin-actions       [exp] (rest exp))
-(defn last-exp?           [seq] (empty? (rest seq)))
-(defn first-exp           [seq] (first seq))
-(defn rest-exps           [seq] (rest seq))
 (defn make-begin          [seq] (cons 'begin seq))
-(defn sequence->exp       [seq] (cond
+#_(defn sequence->exp       [seq] (cond
                                   (nil? seq) seq
                                   (last-exp? seq) (first-exp seq)
                                   :else (make-begin seq)))

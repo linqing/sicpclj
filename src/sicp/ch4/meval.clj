@@ -1,146 +1,110 @@
 (ns sicp.ch4.meval
+  (:refer-clojure :exclude [eval apply])
   (:require [sicp.helpers :refer (error)]
-            [sicp.ch4.expr :as expr]
+            [sicp.ch4.expr :refer :all]
             [sicp.ch4.environment :as environ]
-            [sicp.ch4.rt :as rt]
-            [clojure.test :refer :all]))
+            [sicp.ch4.rt :refer :all]
+            [clojure.test :refer :all]
+            [clojure.core :as    clj]))
 
-(declare meval mapply the-global-environment)
+(declare eval apply the-global-environment)
 
+(defn list-of-values [exps env]
+  (map #(eval % env) exps))
+
+(defn eval-if [exp env]
+  (if (true? (eval (if-predicate exp) env))
+    (eval (if-consequent  exp) env)
+    (eval (if-alternative exp) env)))
+
+(defn eval-sequence [exps env]
+  (last
+   (map #(eval % env) exps)))
 
 (defn eval-definition [exp env]
   (environ/define-variable!
-    (expr/definition-variable exp)
-    (meval (expr/definition-value exp) env)
+    (definition-variable exp)
+    (eval (definition-value exp) env)
     env)
   'ok)
 
+
 (defn eval-assignment [exp env]
-  (environ/set-variable-value! (expr/assignment-variable exp)
-                               (expr/assignment-value exp)
+  (environ/set-variable-value! (assignment-variable exp)
+                               (assignment-value exp)
                                env)
   'ok)
 
-(defn eval-if [exp env]
-  (if (true? (meval (expr/if-predicate exp) env))
-    (meval (expr/if-consequent exp) env)
-    (meval (expr/if-alternative exp) env)))
-
-(defn eval-sequence [exps env]
-  (cond
-    (expr/last-exp? exps)
-    (meval (expr/first-exp exps) env)
-
-    :else
-    (do
-      (meval (expr/first-exp exps) env)
-      (eval-sequence (expr/rest-exps exps) env))))
-
-(declare meval)
-(defn list-of-values [exps env]
-  (map #(meval % env) exps))
-
-(defn meval [exp env]
-  (cond
-    (= exp true) true
-
-    (= exp false) false
-    
-    (expr/self-evaluation? exp)
-    exp
-
-    (expr/variable? exp)
-    (environ/lookup-variable-value exp env)
-
-    (expr/quoted? exp)
-    (expr/text-of-quotation exp)
-
-    (expr/assignment? exp)
-    (eval-assignment exp env)
-
-    (expr/definition? exp)
-    (eval-definition exp env)
-
-    (expr/if? exp)
-    (eval-if exp env)
-
-    (expr/lambda? exp)
-    (rt/make-procedure (expr/lambda-parameters exp)
-                       (expr/lambda-body exp)
-                       env)
-
-    (expr/begin? exp)
-    (eval-sequence (expr/begin-actions exp) env)
-
-    (comment expr/cond? exp)
-    (comment meval (expr/cond->if exp) e)
-    
-    (expr/application? exp)
-    (mapply (meval (expr/operator exp) env)
-            (list-of-values
-               (expr/operands exp) env))
-
-    :else
+(defn eval [exp env]
+  (condp clj/apply [exp]
+    true?            true
+    false?           false
+    self-evaluation? exp
+    variable?        (environ/lookup-variable-value exp env)
+    quoted?          (text-of-quotation exp)
+    assignment?      (eval-assignment exp env)
+    definition?      (eval-definition exp env)
+    if?              (eval-if exp env)
+    lambda?          (make-procedure (lambda-parameters exp) (lambda-body exp) env)
+    begin?           (eval-sequence (begin-actions exp) env)
+;;  cond?         (eval (cond->if exp) e)
+    application?     (apply (eval (operator exp) env)
+                            (list-of-values (operands exp) env))
     (error "不能识别的表达式--EVAL:" exp)))
 
-(defn mapply [procedure arguments]
+(defn apply [procedure arguments]
   (cond
-    (rt/primitive-procedure? procedure)
-    (rt/apply-primitive-procedure procedure arguments)
-    
-    (rt/compound-procedure? procedure)
-    (eval-sequence
-       (rt/procedure-body procedure)
-       (environ/extend-environment
-        (rt/procedure-parameters procedure)
-        arguments
-        (rt/procedure-environment procedure)))
-    
-    :else
-    (error "Unknown procedure type -- APPLY" procedure)))
+    (primitive-procedure? procedure) (apply-primitive-procedure procedure arguments)
+    (compound-procedure? procedure)  (eval-sequence
+                                      (procedure-body procedure)
+                                      (environ/extend-environment
+                                       (procedure-parameters procedure)
+                                       arguments
+                                       (procedure-environment procedure)))
+    :else                            (error "Unknown procedure type -- APPLY" procedure)))
 
 (defn setup-environment []
   (let [initial-env (->> environ/the-empty-environment
-                         (environ/extend-environment (rt/primitive-procedure-names)
-                                                     (rt/primitive-procedure-objects))
+                         (environ/extend-environment (primitive-procedure-names)
+                                                     (primitive-procedure-objects))
                          (environ/extend-environment '(pi) '(3.14)))]
     initial-env))
 
 (def the-global-environment (setup-environment))
 
-(deftest test-meval
+(deftest test-eval
   (let [env (setup-environment)]
     ;; self evaluation
-    (is (= 1 (meval 1 env)))
-    (is (= "hello" (meval "hello" env)))
+    (is (= 1 (eval 1 env)))
+    (is (= "hello" (eval "hello" env)))
 
     ;; variable lookup
-    (is (= 3.14 (meval 'pi env)))
+    (is (= 3.14 (eval 'pi env)))
 
     ;; quoted
-    (is (= '(a b c) (meval '(quote (a b c)) env)))
+    (is (= '(a b c) (eval '(quote (a b c)) env)))
 
     ;; assignment
-    (is (= 'ok (meval '(set! pi 6.28) env)))
+    (is (= 'ok (eval '(set! pi 6.28) env)))
 
     ;; definition
-    (is (= 'ok (meval '(define a 1) env)))
+    (is (= 'ok (eval '(define a 1) env)))
 
     ;; if
-    (is (= 1 (meval '(if true 1 2) env)))
+    (is (= 1 (eval '(if true 1 2) env)))
 
     ;; lambda
-    (is (rt/compound-procedure?
-         (meval '(lambda (x) (+ x 1)) env)))
+    (is (compound-procedure?
+         (eval '(lambda (x) (+ x 1)) env)))
 
     ;; begin
-    (is (= 2 (meval '(begin 1 2) env)))
+    (is (= 2 (eval '(begin 1 2) env)))
     
     ;; application
-    (is (= 3 (meval '(+ 1 2) env)))))
+    (is (= 3 (eval '(+ 1 2) env)))))
 
 (deftest test-program
   (let [env (setup-environment)]
-    (meval '(define incc (lambda (x) (+ x 1))) env)
-    (is (= 2 (meval '(incc 1) env)))))
+    (eval '(define incc (lambda (x) (+ x 1))) env)
+    (is (= 2 (eval '(incc 1) env)))))
 
