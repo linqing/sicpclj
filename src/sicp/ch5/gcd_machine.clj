@@ -54,6 +54,6 @@
                   (assign a (reg b))
                   (assign b (reg t))
                   (goto (label test-b))
-                  gcb-done
+                  gcd-done
                   (perform (op print) (reg a))
                   (goto (label gcd-loop)))))
