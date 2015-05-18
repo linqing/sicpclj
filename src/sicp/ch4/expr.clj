@@ -1,5 +1,6 @@
 (ns sicp.ch4.expr
-  (:require [sicp.helpers :refer (tagged-list?)]))
+  (:require [sicp.helpers :refer [tagged-list? error]]
+            [clojure.test :refer :all]))
 
 ;; 这里的自求值表达式只有数和字符串
 (defn self-evaluation? [exp]
@@ -37,9 +38,11 @@
 ;; (define (<var> (<parameter> ... <parameter>))
 ;;   <body>)
 (defn definition?         [exp] (tagged-list? exp 'define))
-(defn definition-variable [exp] (if (symbol? (second exp))
-                                  (second exp)
-                                  (first (second exp))))
+(defn definition-variable [exp]
+  (if (symbol? (second exp))
+    (second exp)
+    (first (second exp))))
+
 (defn definition-value    [exp] (if (symbol? (second exp))
                                   (last exp)
                                   (let [[_ [_ & parameters] & body] exp]
@@ -48,23 +51,22 @@
 ;; 条件表达式由if开始，有一个谓词部分、一个推论部分和一个（可缺的）替代部分。
 ;; 如果这一表达式没有替代部分，我们就以false作为其替代。
 (defn if?                 [exp] (tagged-list? exp 'if))
-(defn if-predicate        [exp] (nth exp 1))
-(defn if-consequent       [exp] (nth exp 2))
+(defn if-predicate        [exp] (first exp))
+(defn if-consequent       [exp] (second exp))
 (defn if-alternative      [exp] (if (nth exp 3)
                                   (nth exp 3)
                                   nil))
-(defn make-if             [predicate consequence alternative] (list 'if predicate
-                                                                    consequence
-                                                                    alternative))
+(defn make-if             [predicate consequence alternative]
+  (list 'if predicate consequence alternative))
 
 ;; begin包装起来一个表达式序列
 (defn begin?              [exp] (tagged-list? exp 'begin))
 (defn begin-actions       [exp] (rest exp))
 (defn make-begin          [seq] (cons 'begin seq))
-#_(defn sequence->exp       [seq] (cond
-                                  (nil? seq) seq
-                                  (last-exp? seq) (first-exp seq)
-                                  :else (make-begin seq)))
+(defn sequence->exp       [seq] (case (count seq)
+                                  0   nil
+                                  1   (first seq)
+                                  (make-begin seq)))
 
 ;; 过程应用就是不属于上述各种表达式类型的任意复合表达式
 (defn application?        [exp] (list? exp))
@@ -74,4 +76,33 @@
 (defn first-operands      [ops] (first ops))
 (defn rest-operands       [ops] (rest ops))
 
-;; 派生表达式...cond...待补充
+;; 派生表达式cond
+(defn cond?               [exp] (tagged-list? 'cond))
+(defn cond-clauses        [exp] (rest exp))
+(defn cond-predicate      [clause] (first clause))
+(defn cond-actions        [clause] (rest clause))
+(defn cond-else-clauses?  [clause] (= (cond-predicate clause) 'else))
+(defn expand-clauses [clauses]
+  (if (empty? clauses)
+    'false      ;; no else clause
+    (let [first-clause (first clauses)
+          rest-clauses (rest clauses)]
+      (if (cond-else-clauses? first-clause)
+        (if (empty? rest-clauses)
+          (sequence->exp (cond-actions first-clause))
+          (error "ELSE clause isn't last -- COND->IF" clauses))
+        (make-if (cond-predicate first-clause)
+                 (sequence->exp (cond-actions first-clause))
+                 (expand-clauses rest-clauses))))))
+(defn cond->if [exp]
+  (expand-clauses (cond-clauses exp)))
+
+(deftest test-cond-expr
+  (let [exp '(cond (1 2) (3 4) (else 5))
+        expanded '(if 1 2
+                      (if 3 4
+                          5))]
+    (is (= (cond->if exp)
+           expanded))))
+  
+  

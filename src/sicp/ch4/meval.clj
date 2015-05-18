@@ -47,7 +47,7 @@
     if?              (eval-if exp env)
     lambda?          (make-procedure (lambda-parameters exp) (lambda-body exp) env)
     begin?           (eval-sequence (begin-actions exp) env)
-;;  cond?         (eval (cond->if exp) e)
+    cond?            (eval (cond->if exp) env)
     application?     (apply (eval (operator exp) env)
                             (list-of-values (operands exp) env))
     (error "不能识别的表达式--EVAL:" exp)))
